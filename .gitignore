@@ -139,3 +139,4 @@ temp/
 *.mp4
 *.csv
 __*.py
+__*.bat

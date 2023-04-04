@@ -168,7 +168,11 @@ for vid in range(start_vid,end_vid):
 
     #------- Web API コール　----------
     # 通話履歴は必要ない
-    #------- ダミー Web API コール　----------
+    #header = ['CH','S-NS','START','END','TEXT']    
+    #with open('temp/txt_'+str(vid)+'.csv','w',newline="") as f:
+    #    writer = csv.writer(f)
+    #    writer.writerow(header)
+    #------- Web API コール　----------
     post_url = os.environ["WAPI_POST_TRANSCRIPT"]
     headers = {
     'Content-Type':'application/x-www-form-urlencoded',

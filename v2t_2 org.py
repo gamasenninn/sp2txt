@@ -22,7 +22,7 @@ load_dotenv()
 openai.api_key = os.environ["OPEN_API_KEY"] 
 
 # 要約するテキストを指定
-#text = ''
+text = ''
 # モードの選択　chatGPTかそれ以外か
 
 # SP2TXTが存在するディレクトリ
@@ -97,24 +97,80 @@ for vid in range(start_vid,end_vid):
 
     sound = AudioSegment.from_file("tempin.m4a",format="m4a")
     up_sound = sound + 10
-    up_sound.export('tempout.mp3',format="mp3")
+    up_sound.export('tempout.wav',format="wav")
 
-    #subprocess.run("stereo_split.bat")
+    subprocess.run("stereo_split.bat")
 
     #--------------文字お越し--------------
-    src_text = ""
-    with open("tempout.mp3", "rb") as file:
-        params ={
-            "response_format" : "vtt",
-            "temperature" : 0, 
-            "language" : "ja",
-            "prompt":""
-        }
 
-        src_text = openai.Audio.transcribe("whisper-1", file,**params)
-        print(src_text)
+    chs = ["L","R"]
+    min_silence_len = 2000
+
+    for file in glob.glob('temp/temp_NS_*.wav'):
+        os.remove(file)
+
+    print ("\n#######<"+vid+">#############")
+
+    all_ranges = []
+    sound ={}
+    for ch in chs:
+        sound = AudioSegment.from_file("tempout_"+ch+".wav", format="wav")
+
+        print ("----Detect NonSilent---",ch)
+        nonsilent_ranges = detect_nonsilent(sound, min_silence_len=min_silence_len, silence_thresh=-40)
+        for l in nonsilent_ranges:
+            l.insert(0,ch)
+            l.insert(1,'N')
+            sound[l[2]:l[3]+500].export("temp\\temp_NS_"+str(l[2])+".wav",format='wav')
+        #print("nonsilent_ranges:",nonsilent_ranges)
+
+        print ("----Detect Silent---",ch)
+        silent_ranges = detect_silence(sound, min_silence_len=min_silence_len, silence_thresh=-40)
+        for l in silent_ranges:
+            l.insert(0,ch)
+            l.insert(1,'S')
+            l.insert(4,'')
+        #print("silent_ranges:",silent_ranges)
+
+        all_ranges += silent_ranges+nonsilent_ranges
+        #print(all_ranges)
+        
+
+    srt_all_ranges = sorted(all_ranges,key=lambda x: x[2])
+    #print(srt_all_ranges)
+
+
+    r = sr.Recognizer()
+    for voice_l in srt_all_ranges:
+        if voice_l[1] == 'N':
+            with sr.AudioFile("temp\\temp_NS_" + str(voice_l[2]) +".wav") as source:
+                audio = r.record(source)
+            try: 
+                text = r.recognize_google(audio, language='ja-JP')
+            except:
+                text = ''
+                pass
+            voice_l.insert(4,text)
+            #print('[',voice_l[0],voice_l[2],']',text)
+            print(voice_l)
+
+
+    header = ['CH','S-NS','START','END','TEXT']    
+    with open('temp/txt_'+str(vid)+'.csv','w',newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        for i in srt_all_ranges:
+            if i[4] != '':
+                i[4] = i[4].replace('&','＆')
+                writer.writerow(i)
 
     #---- 記事の要約 -------
+    src_text = '' 
+    for i in srt_all_ranges:
+        if i[4] != '':
+            i[4] = i[4].replace('&','＆')
+            src_text +=  f"{i[0]}: {i[4]}\n"
+    #print("src_text:",src_text)
     if src_text:
         try:
             response = openai.ChatCompletion.create(
@@ -154,8 +210,6 @@ for vid in range(start_vid,end_vid):
         print("sum_text:",summary)
         with open(local_file_path,  'w' ,encoding='cp932') as wf:
             wf.write(summary)
-            wf.write("\n\n通話履歴:\n")
-            wf.write(src_text)
 
         ftp = ftplib.FTP(ftp_url)
         ftp.set_pasv('true')
@@ -167,12 +221,13 @@ for vid in range(start_vid,end_vid):
         ftp.quit()    
 
     #------- Web API コール　----------
-    # 通話履歴は必要ない
-    #------- ダミー Web API コール　----------
     post_url = os.environ["WAPI_POST_TRANSCRIPT"]
     headers = {
     'Content-Type':'application/x-www-form-urlencoded',
     }
-    data = "vid="+str(vid)+"&memo="+json.dumps([])
+    data = "vid="+str(vid)+"&memo="+json.dumps(srt_all_ranges)
 
     r = requests.post(post_url,data=data, headers=headers,verify=False )
+
+    print(r)
+

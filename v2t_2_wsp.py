@@ -5,17 +5,14 @@ import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 import os
 import sys
-#import pydub
 from pydub import AudioSegment
 from pydub.silence import split_on_silence,detect_silence,detect_nonsilent
-import speech_recognition as sr
-import subprocess
-import glob
 import csv
 # open ai 対応
 import openai
 from dotenv import load_dotenv
 import ftplib
+import re
 
 load_dotenv()
 #----------　OPEN AI　APIを使用するための前処理 ------
@@ -56,6 +53,18 @@ token = jdic[0]['access_token']
 
 #print(token)
 
+def extract_text(input_string):
+    # タイムスタンプのパターンを定義
+    pattern = r'\d{2}:\d{2}:\d{2}\.\d{3} --> \d{2}:\d{2}:\d{2}\.\d{3}\n'
+    
+    # タイムスタンプを削除
+    text_only = re.sub(pattern, '', input_string)
+    
+    # 連続した改行を1つの改行に置き換え
+    single_line_breaks = re.sub(r'\n{2,}', '\n', text_only)
+    
+    return single_line_breaks.strip()
+
 
 while True:
 
@@ -95,15 +104,9 @@ for vid in range(start_vid,end_vid):
     with open("tempin.m4a",'wb') as fout:
         fout.write(r.content)
 
-    sound = AudioSegment.from_file("tempin.m4a",format="m4a")
-    up_sound = sound + 10
-    up_sound.export('tempout.mp3',format="mp3")
-
-    #subprocess.run("stereo_split.bat")
-
-    #--------------文字お越し--------------
+    #--------------文字起こし--------------
     src_text = ""
-    with open("tempout.mp3", "rb") as file:
+    with open("tempin.m4a", "rb") as file:
         params ={
             "response_format" : "vtt",
             "temperature" : 0, 
@@ -116,6 +119,7 @@ for vid in range(start_vid,end_vid):
 
     #---- 記事の要約 -------
     if src_text:
+        req_text = extract_text(src_text)
         try:
             response = openai.ChatCompletion.create(
                     model="gpt-3.5-turbo",
@@ -135,14 +139,14 @@ for vid in range(start_vid,end_vid):
                             },
                             {
                                 "role": "user",
-                                "content": src_text
+                                "content": req_text
                             }
                         ],
             )
             summary = response.choices[0].message.content.strip()
         except Exception as e:
-            print("exception:",e)
-            summary = e #エラーならその旨をテキストにする
+            print("exception:",str(e))
+            summary = str(e) #エラーならその旨をテキストにする
 
         ftp_url = os.environ["FTP_SERVER_URL"]
         ftp_user_id = os.environ["FTP_USER_ID"]
@@ -167,11 +171,11 @@ for vid in range(start_vid,end_vid):
         ftp.quit()    
 
     #------- Web API コール　----------
-    # 通話履歴は必要ない
-    #header = ['CH','S-NS','START','END','TEXT']    
-    #with open('temp/txt_'+str(vid)+'.csv','w',newline="") as f:
-    #    writer = csv.writer(f)
-    #    writer.writerow(header)
+    # 通話履歴は空のデータ　終了分をチェックするため
+    header = ['CH','S-NS','START','END','TEXT']    
+    with open('temp/txt_'+str(vid)+'.csv','w',newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
     #------- Web API コール　----------
     post_url = os.environ["WAPI_POST_TRANSCRIPT"]
     headers = {

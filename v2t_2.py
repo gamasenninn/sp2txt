@@ -126,7 +126,7 @@ for vid in range(start_vid,end_vid):
                         messages=[
                             {
                                 "role": "system",
-                                "content": "電話でのやりとりです。次に示す項目ごとに効果的に要約してください。" 
+                                "content": "中古農機具店での電話のやりとりです。次に示す項目ごとに効果的に要約してください。" 
                                         "【カテゴリー】(会話全体のカテゴリは?)\n" 
                                         "【スタッフ名】(スタッフの名前は?)" 
                                         "【顧客情報】（顧客の名前、会社名、役職、電話番号など）" 
@@ -156,7 +156,7 @@ for vid in range(start_vid,end_vid):
         local_file_path = os.path.join(os.environ["LOCAL_FILE_DIR"],sum_file_name)
 
         print("sum_text:",summary)
-        with open(local_file_path,  'w' ,encoding='cp932') as wf:
+        with open(local_file_path,  'w' ,encoding='cp932',errors='ignore') as wf:
             wf.write(summary)
             wf.write("\n\n通話履歴:\n")
             wf.write(src_text)

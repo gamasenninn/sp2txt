@@ -65,6 +65,17 @@ def extract_text(input_string):
     
     return single_line_breaks.strip()
 
+# 通話履歴のチェックして通常会話かどうかを判断
+def is_normal(call_history: str) -> bool:
+
+    lines = call_history.strip().split('\n')
+    print([line for line in lines[1::3]])
+    is_pattern1 = all("【電話の呼び出し音】" in line for line in lines[1::3])
+    is_pattern2 = lines[1].startswith("【電話の切れる音】")
+    is_pattern3 = lines[1].startswith("終了です")
+
+    return not(is_pattern1 or is_pattern2 or is_pattern3)
+
 
 while True:
 
@@ -121,29 +132,32 @@ for vid in range(start_vid,end_vid):
     if src_text:
         req_text = extract_text(src_text)
         try:
-            response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "中古農機具店での電話のやりとりです。次に示す項目ごとに効果的に要約してください。" 
-                                        "【カテゴリー】(会話全体のカテゴリは?)\n" 
-                                        "【スタッフ名】(スタッフの名前は?)" 
-                                        "【顧客情報】（顧客の名前、会社名、役職、電話番号など）" 
-                                        "【商品情報】(商品名、メーカ、型式など)" 
-                                        "【期日】(期日的な内容は？)" 
-                                        "【問題点】(クレームなど）"
-                                        "【目的】(目的を短く）"
-                                        "【次のアクション】(折り返し電話、メール送信、など）"
-                                        "【内容】内容を短く箇条書きで要約?\n" 
-                            },
-                            {
-                                "role": "user",
-                                "content": req_text
-                            }
-                        ],
-            )
-            summary = response.choices[0].message.content.strip()
+            if is_normal(req_text):
+                response = openai.ChatCompletion.create(
+                        model="gpt-3.5-turbo",
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "中古農機具店での電話のやりとりです。次に示す項目ごとに効果的に要約してください。" 
+                                            "【カテゴリー】(会話全体のカテゴリは?)\n" 
+                                            "【スタッフ名】(スタッフの名前は?)" 
+                                            "【顧客情報】（顧客の名前、会社名、役職、電話番号など）" 
+                                            "【商品情報】(商品名、メーカ、型式など)" 
+                                            "【期日】(期日的な内容は？)" 
+                                            "【問題点】(クレームなど）"
+                                            "【目的】(目的を短く）"
+                                            "【次のアクション】(折り返し電話、メール送信、など）"
+                                            "【内容】内容を短く箇条書きで要約?\n" 
+                                },
+                                {
+                                    "role": "user",
+                                    "content": req_text
+                                }
+                            ],
+                )
+                summary = response.choices[0].message.content.strip()
+            else:
+                summary = "通話内容が不通もしくは無音です。"
         except Exception as e:
             print("exception:",str(e))
             summary = str(e) #エラーならその旨をテキストにする

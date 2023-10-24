@@ -162,6 +162,8 @@ for vid in range(start_vid,end_vid):
             print("exception:",str(e))
             summary = str(e) #エラーならその旨をテキストにする
 
+
+        print("------ FTP前------")
         ftp_url = os.environ["FTP_SERVER_URL"]
         ftp_user_id = os.environ["FTP_USER_ID"]
         ftp_pass = os.environ["FTP_PASSWORD"]
@@ -183,6 +185,7 @@ for vid in range(start_vid,end_vid):
             ftp.storbinary(f"STOR {remote_file_path}", file)
 
         ftp.quit()    
+        print("------ FTP後------")
 
     #------- Web API コール　----------
     # 通話履歴は空のデータ　終了分をチェックするため

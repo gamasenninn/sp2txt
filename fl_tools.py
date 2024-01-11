@@ -48,7 +48,25 @@ def download_audio_file(vid, token):
         print(f"Error downloading audio file for VID {vid}: {response.status_code}")
         return False
 
-def post_items(vid, token, items):
+def fl_get_items(vid, token ):
+    if vid:
+        params = f"?uniqueid={vid}"
+    else:
+        params = f"?limit=100"
+
+    url_items = FLEX_LOG_API_BASE_URL + '/calllog/'+params
+    headers = {'Access-token': token}
+
+    response = requests.get(url_items, auth=HTTPDigestAuth(FL_USER_ID, FL_PASSWORD), headers=headers, verify=False)
+    
+    if response.status_code == 200:
+        return json.loads(response.text)
+    else:
+        print(f"Error get items for VID {vid}: {response.status_code}")
+        return False
+
+
+def fl_post_free_items(vid, token, items):
     url_free_item = FLEX_LOG_API_BASE_URL + str(vid) + '/calllog/freeitem'
     headers = {'Access-token': token}
     params = {
@@ -60,6 +78,7 @@ def post_items(vid, token, items):
     }
     response = requests.post(url_free_item, auth=HTTPDigestAuth(FL_USER_ID, FL_PASSWORD), headers=headers, data=params, verify=False)
     #print(response)
+    
     if response.status_code == 200:
         return True
     else:
@@ -81,4 +100,12 @@ if __name__ == "__main__":
         "test04",
         "test05"
     ]
-    post_items(vid, token, items)
+    fl_post_free_items(vid, token, items)
+
+    items = fl_get_items(vid, token)
+    for item in items:
+        print(item)
+
+    items = fl_get_items(0, token)
+    for i, item in enumerate(items):
+        print(i, item)

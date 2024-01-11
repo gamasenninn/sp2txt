@@ -87,10 +87,12 @@ def fl_post_free_items(vid, token, items):
 
 if __name__ == "__main__":
 
+    # test用メイン
+    vid = 46953
+
     token = get_flex_log_token()
     print(token)
 
-    vid = 46953
     download_audio_file(vid, token)
 
     items=[

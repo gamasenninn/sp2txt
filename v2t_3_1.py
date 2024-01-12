@@ -193,13 +193,13 @@ def fl_update_free_items(vid,token,json_text):
     #if pname or maker or model:
     #    etc_txt += f"【製品】{maker} {pname} {model}\n" 
 
-    if j.get('limit'):
+    if j.get('limit') and j.get('limit') not in ["特になし","なし","不明"]:
         etc_txt += f"【期日】{j.get('limit')}<br/>\n"
 
-    if j.get('problem'):
+    if j.get('problem') and j.get('problem') not in ["特になし","なし","不明"]:
         etc_txt += f"【問題点】{j.get('problem')}<br/>\n"
 
-    if j.get('todo'):
+    if j.get('todo')  and j.get('todo') not in ["特になし","なし","不明"]:
         etc_txt += f"【TODO】{j.get('todo')}<br/>\n"
 
     items = ["","","","",""]

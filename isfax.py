@@ -1,8 +1,8 @@
 import sys
 from pydub import AudioSegment
 import numpy as np
+import matplotlib.pyplot as plt
 
-target_freq_ranges = [(1660, 1665), (2099, 2100)] #FAXの音源の特徴周波数
 num_top_freq = 100
 
 def truncate(frequency, decimals=0):
@@ -17,13 +17,6 @@ def load_audio(audio_file_path):
     data = data / np.max(np.abs(data))
     samplerate = audio.frame_rate
     return data, samplerate
-
-def __calculate_fft(data, samplerate,start_from_beginning=10, end_from_last=10):
-    # FFT解析を行い、周波数と振幅を返す
-    fft_result = np.fft.fft(data)
-    fft_freq = np.fft.fftfreq(len(data), 1 / samplerate)
-    amplitudes = np.abs(fft_result)
-    return fft_freq, amplitudes
 
 def calculate_fft(data, samplerate, start_from_beginning=10, end_from_last=10):
     """
@@ -81,7 +74,7 @@ def check_target_freq_ranges(top_freq, target_freq_ranges):
     return found_freqs
 
 def is_fax(audio_file_path):
-
+    target_freq_ranges = [(1660, 1665), (2099, 2100)] #FAXの音源の特徴周波数
     fft_freq, amplitudes =  load_audio_fft(audio_file_path,start_from_beginning=30)  
     top_freq = find_top_frequencies(fft_freq, amplitudes, num_top_freq)    
     return check_target_freq_ranges(top_freq, target_freq_ranges)
@@ -121,44 +114,40 @@ def classify_audio_type(audio_file_path):
 
     return "NORMAL"
 
+#------ main のための関数　--------
+def plot_sound(fft_freq, amplitudes,samplerate,file):
+    plt.figure(figsize=(15, 5))
+    plt.plot(fft_freq, amplitudes)
+    plt.title("FFT of the Audio File")
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Amplitude")
+    plt.xlim(0, samplerate / 2)
+    plt.savefig(f'{file}.png')
+    plt.show()
+
+def go_test():
+    def_test = [
+        ["sound/fax.m4a","FAX"],
+        ["sound/call_only_01.m4a","CALL_ONLY"],
+        ["sound/call_only_02.m4a","CALL_ONLY"],
+        ["sound/call_only_03.m4a","CALL_ONLY"],
+        ["sound/call_hum_01.m4a","NORMAL"],
+        ["sound/call_hum_02.m4a","NORMAL"]
+    ]
+    for file,type in def_test:
+        print(file,type)
+        assert classify_audio_type(file) == type
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-
-    def plot_sound(fft_freq, amplitudes,samplerate,file):
-        plt.figure(figsize=(15, 5))
-        plt.plot(fft_freq, amplitudes)
-        plt.title("FFT of the Audio File")
-        plt.xlabel("Frequency (Hz)")
-        plt.ylabel("Amplitude")
-        plt.xlim(0, samplerate / 2)
-        plt.savefig(f'{file}.png')
-        plt.show()
-
 
     if len(sys.argv) < 2:
         print("Usage: python isfax.py <audio_file_path>")
-        sys.exit(1)
-
-    audio_file_path = sys.argv[1]
-
-    if not audio_file_path: #パラメータがなければテストを実行
-
-        def_test = [
-            ["sound/fax.m4a","FAX"],
-            ["sound/call_only_01.m4a","CALL_ONLY"],
-            ["sound/call_only_02.m4a","CALL_ONLY"],
-            ["sound/call_only_03.m4a","CALL_ONLY"],
-            ["sound/call_hum_01.m4a","NORMAL"],
-            ["sound/call_hum_02.m4a","NORMAL"]
-        ]
-        for file,type in def_test:
-            print(file,type)
-            assert classify_audio_type(file) == type
-
+        print("-----\n-----\nGo test\n\n")
+        go_test()
         sys.exit(0)
 
+    audio_file_path = sys.argv[1]
 
     #------ FAXの判定　--------
 
@@ -173,9 +162,6 @@ if __name__ == "__main__":
 
     #---FAX以外をチェックする場合(コールだけ)
     target_freq_ranges = [(397, 400), (416, 417)] #FAXの音源の特徴周波数
-
-
-
 
     data, samplerate = load_audio(audio_file_path)
     fft_freq, amplitudes = calculate_fft(data, samplerate,start_from_beginning=20)

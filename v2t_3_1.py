@@ -8,7 +8,7 @@ from urllib3.exceptions import InsecureRequestWarning
 import openai
 from dotenv import load_dotenv
 from fl_tools import get_flex_log_token,download_audio_file,fl_post_free_items
-from isfax import is_fax
+from isfax import classify_audio_type
 
 # 環境変数の読み込み
 load_dotenv()
@@ -20,31 +20,22 @@ FTP_PASSWORD = os.environ["FTP_PASSWORD"]
 REMOTE_FILE_DIR = os.environ["REMOTE_FILE_DIR"]
 WAPI_POST_TRANSCRIPT = os.environ["WAPI_POST_TRANSCRIPT"]
 
+NUM_TOP_FREQ = 100
+TEMP_FILE = "tempin.m4a"
+
 openai.api_key = OPEN_API_KEY
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
-def detect_fax():
-    found_freqs = is_fax("tempin.m4a")
-    detected = 0
-    for freq_range, found in found_freqs.items():
-        if found:
-            print(f"指定周波数帯域 {freq_range[0]}Hz ～ {freq_range[1]}Hz が存在します。 (FAX)")
-            detected += 1
-        #else:
-        #    print(f"指定周波数帯域 {freq_range[0]}Hz ～ {freq_range[1]}Hz は存在しません。")
-
-    if detected > 1 :
-        return True
-    else:
-        return False
 
 
 def transcribe_audio():
     try:
-        if detect_fax():
-            response = "FAX"
+        sound_type = classify_audio_type(TEMP_FILE)
+        if not sound_type == "NORMAL":
+            print("detected:",sound_type)
+            return sound_type
         else:
-            with open("tempin.m4a", "rb") as file:
+            with open(TEMP_FILE, "rb") as file:
                 params = {
                     "response_format": "vtt",
                     "temperature": 0, 
@@ -77,16 +68,6 @@ def upload_to_ftp(vid, summary,src_text):
     except Exception as e:
         print(f"Error in FTP upload: {str(e)}")
 
-def is_normal(call_history):
-    #lines = call_history.strip().split('\n')
-    #is_pattern1 = all("【電話の呼び出し音】" not in line for line in lines)
-    #is_pattern2 = not lines[0].startswith("【電話の切れる音】")
-    #is_pattern3 = not lines[0].startswith("終了です")
-
-    #return is_pattern1 and is_pattern2 and is_pattern3
-    #return is_pattern1
-    return True
-
 def summarize_text(src_text):
     #req_text = extract_text(src_text)
     if src_text == "FAX":
@@ -100,47 +81,47 @@ def summarize_text(src_text):
             'summary': []
         })
 
+    if src_text == "CALL_ONLY":
+        return json.dumps({
+            'category': "不通/不達",
+            'customer_info': {'cname':"不通", 'phone':""},
+            'product_info': {'pname':"",'maker':"",'model':"",'model':""},
+            'limit': "",
+            'problem': "",
+            'todo': "",
+            'summary': []
+        })
+
     try:
-        if is_normal(src_text):
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo-1106",
-                response_format={ "type": "json_object" },
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "中古農機具店での電話のやりとりです。次に示す項目ごとに効果的に要約してください。"
-                            "出力は下記の項目だけを純粋な配列のJSON形式でお願いします。"
-                            "{"
-                                "category:(会話の全体内容を一言で表現してください),\n"
-                                "customer_info:{cname:(顧客の名前),phone:(電話番号など),\n"
-                                "product_info:{pname:(商品名),maker:(メーカ),model:(型式など)},\n"
-                                "limit:(具体的な期日がある場合など),\n"
-                                "ploblem:(問題点やクレームなど),\n"
-                                "todo:(やるべきアクションなど),\n"
-                                "summary:[(内容を箇条書きで要約)]\n"
-                                
-                            "}"
-                        )
-                    },
-                    {
-                        "role": "user",
-                        "content": src_text
-                    }
-                ],
-            )
-            return response.choices[0].message.content.strip()
-        else:
-            #return "通話内容が不通もしくは無音です。"
-            return json.dumps({
-                'category': "通話内容が不通もしくは無音です。",
-                'customer_info': {'cname':"不通/無音", 'phone':""},
-                'product_info': {'pname':"",'maker':"",'model':"",'model':""},
-                'limit': "",
-                'problem': "",
-                'todo': "",
-                'summary': []
-            })
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo-1106",
+            response_format={ "type": "json_object" },
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "中古農機具店での電話のやりとりです。次に示す項目ごとに効果的に要約してください。"
+                        "出力は下記の項目だけを純粋な配列のJSON形式でお願いします。"
+                        "{"
+                            "category:(会話の全体内容を一言で表現してください),\n"
+                            "customer_info:{cname:(顧客の名前),phone:(電話番号など),\n"
+                            "product_info:{pname:(商品名),maker:(メーカ),model:(型式など)},\n"
+                            "limit:(具体的な期日がある場合など),\n"
+                            "ploblem:(問題点やクレームなど),\n"
+                            "todo:(やるべきアクションなど),\n"
+                            "summary:[(内容を箇条書きで要約)]\n"
+                            
+                        "}"
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": src_text
+                }
+            ],
+        )
+        return response.choices[0].message.content.strip()
+
     except Exception as e:
         print("Exception in text summarization:", str(e))
         return str(e) # エラーが発生した場合はエラーメッセージを要約とする
@@ -231,21 +212,23 @@ def v2t_main(start_vid, end_vid):
         process_call(vid, token)
 
 # コマンドライン引数の処理
+def parse_vids(vids):
+    # '-'で分割し、数値に変換
+    vids_l = list(map(int, vids.split('-')))
+
+    if len(vids_l) == 1: # 単一の数値の場合
+        return vids_l[0], vids_l[0] + 1
+    elif len(vids_l) == 2: # 範囲が指定された場合
+        return vids_l[0], vids_l[1] + 1
+    else:
+        print("無効な通話ID形式です。")
+        sys.exit(1)
+ 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         vids = sys.argv[1]
     else:
         vids = input('通話IDを入力してください[s-e]:')
 
-    vids_l = vids.split('-')
-    if len(vids_l) == 2:
-        start_vid = int(vids_l[0])
-        end_vid = int(vids_l[1]) + 1
-    elif len(vids_l) == 1:
-        start_vid = int(vids_l[0])
-        end_vid = start_vid + 1
-    else:
-        print("無効な通話IDです。")
-        sys.exit(1)
-
+    start_vid, end_vid = parse_vids(vids)
     v2t_main(start_vid, end_vid)

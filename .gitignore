@@ -141,3 +141,4 @@ temp/
 __*.py
 __*.bat
 all_summary.txt
+*.png

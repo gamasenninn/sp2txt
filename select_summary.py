@@ -14,8 +14,8 @@ file_path = os.path.join(file_dir,"sum_*.txt")
 
 file_list = glob.glob(file_path)
 
-from_num = 46274
-to_num = 46292
+from_num = 47023
+to_num = 47043
 
 
 # Pattern to extract the number from the filename

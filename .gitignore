@@ -143,3 +143,4 @@ __*.bat
 all_summary.txt
 *.png
 trashbox/
+replace.dic

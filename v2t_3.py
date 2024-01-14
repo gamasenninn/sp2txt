@@ -154,12 +154,13 @@ def fl_update_free_items(vid,token,json_text):
     etc_txt += add_text_if_present(j, 'problem', '問題点')
     etc_txt += add_text_if_present(j, 'todo', 'TODO')
 
-    items = ["","","","",""]
-    items[0] = ""      #こちら側担当
-    items[1] = customer_txt      #相手名
-    items[2] = sum_txt      #内容
-    items[3] = etc_txt      #仕切
-    items[4] = j.get('category',"")  #カテゴリ
+    items = [
+        "",                    # こちら側担当者の名前 (現在は空)
+        customer_txt,          # 顧客名
+        sum_txt,               # トランザクションの内容
+        etc_txt,               # 追加情報または注記
+        j.get('category', "")  # カテゴリ
+    ]
 
     if fl_post_free_items(vid, token, items):
         print(f"Successfully updated flexlog : {vid}")

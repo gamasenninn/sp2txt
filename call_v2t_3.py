@@ -7,14 +7,15 @@ import time
 import os
 from dotenv import load_dotenv
 
-#-------------- requestのワーニングを非表示にする-----
-urllib3.disable_warnings(InsecureRequestWarning)
 
-#----------　WEB APIのアドレス ------
+#環境変数設定
 load_dotenv()
 WAPI_GET_ITEM = os.environ['WAPI_GET_ITEM'] 
 LOCAL_FILE_DIR = os.environ['LOCAL_FILE_DIR']
 wait_time = 300
+
+#ワーニング抑制
+urllib3.disable_warnings(InsecureRequestWarning)
 
 while True:
 
@@ -38,7 +39,7 @@ while True:
             #print('v2t_3.py起動すべし')
             subprocess.run(['python', 'v2t_3.py', vid])
         else:
-            print(f'txt_{vid}.csvはもう存在するから、スキップするわ！')
+            print(f'存在するから、スキップすわ！')
 
     # 5分待機する
     time.sleep(wait_time)

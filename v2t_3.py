@@ -8,12 +8,13 @@ from dotenv import load_dotenv
 from fl_tools import get_flex_log_token,download_audio_file,fl_post_free_items
 from isfax import classify_audio_type
 from upload import upload_to_ftp
+from replace_word import load_conversion_dict,replace_text
 
 # 環境変数の読み込み
 load_dotenv()
 OPEN_API_KEY = os.environ["OPEN_API_KEY"]
 TEMP_FILE = "tempin.m4a"
-
+REPLACE_DICT = "replace.dic" 
 # メッセージのテンプレート
 MESSAGE_TEMPLATE = """
 {keyword}次に示す項目ごとに効果的に要約してください。
@@ -32,6 +33,8 @@ MESSAGE_TEMPLATE = """
 openai.api_key = OPEN_API_KEY
 
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
+
+replace_dict = load_conversion_dict(REPLACE_DICT)
 
 def transcribe_audio():
     try:
@@ -172,6 +175,7 @@ def process_call(vid, token):
     if download_audio_file(vid, token):
         src_text = transcribe_audio()
         if src_text:
+            src_text = replace_text(src_text,replace_dict)
             summary = summarize_text(src_text)
             fl_update_free_items(vid,token,summary)
             conv_text = convert_text(summary)

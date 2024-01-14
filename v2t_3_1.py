@@ -57,34 +57,30 @@ def transcribe_audio():
 def create_system_message_content(template,keyword, additional_info=""):
     return template.format(keyword=keyword) + additional_info
 
+def create_json_response(category, cname, 
+        phone="", pname="", maker="", model="", 
+        limit="", problem="", todo="", summary=[]):
+    return json.dumps({
+        'category': category,
+        'customer_info': {'cname': cname, 'phone': phone},
+        'product_info': {'pname': pname, 'maker': maker, 'model': model},
+        'limit': limit,
+        'problem': problem,
+        'todo': todo,
+        'summary': summary
+    })
+
 def summarize_text(src_text):
     #req_text = extract_text(src_text)
     if src_text == "FAX":
-        return json.dumps({
-            'category': "FAX",
-            'customer_info': {'cname':"FAX", 'phone':""},
-            'product_info': {'pname':"",'maker':"",'model':"",'model':""},
-            'limit': "",
-            'problem': "",
-            'todo': "",
-            'summary': []
-        })
+        return create_json_response("FAX", "FAX")
 
     if src_text == "CALL_ONLY":
-        return json.dumps({
-            'category': "不通/不達",
-            'customer_info': {'cname':"不通", 'phone':""},
-            'product_info': {'pname':"",'maker':"",'model':"",'model':""},
-            'limit': "",
-            'problem': "",
-            'todo': "",
-            'summary': []
-        })
+        return create_json_response("不通/不達", "不通")
 
     try:
         keyword = "中古農機具店での電話のやりとりです。"
         system_message_content = create_system_message_content(MESSAGE_TEMPLATE,keyword)
-        print(system_message_content)
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo-1106",
             response_format={ "type": "json_object" },
@@ -156,7 +152,6 @@ def join_summary_text(summary_list):
 
 def fl_update_free_items(vid,token,json_text):
 
-    print(json_text)
     j = json.loads(json_text)   
 
     sum_txt = join_summary_text(j.get('summary', []))

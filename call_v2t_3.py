@@ -35,10 +35,13 @@ while True:
     print(diff_vids)
 
     for vid in diff_vids:
+        #他の環境ですでに文字起こしが終わる場合がある
         if not os.path.exists(f'{LOCAL_FILE_DIR}/sum_{vid}.txt'):
             subprocess.run(['python', 'v2t_3.py', vid])
         else:
-            print(f'存在するから、スキップすわ！')
+            print(f'存在するから、処理をスキップ！')
 
     # 待機する
     time.sleep(wait_time)
+
+

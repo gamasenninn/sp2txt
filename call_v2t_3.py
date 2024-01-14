@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 WAPI_GET_ITEM = os.environ['WAPI_GET_ITEM'] 
 LOCAL_FILE_DIR = os.environ['LOCAL_FILE_DIR']
-wait_time = 300
+wait_time = 500
 
 #ワーニング抑制
 urllib3.disable_warnings(InsecureRequestWarning)
@@ -40,5 +40,5 @@ while True:
         else:
             print(f'存在するから、スキップすわ！')
 
-    # 5分待機する
+    # 待機する
     time.sleep(wait_time)

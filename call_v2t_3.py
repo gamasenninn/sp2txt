@@ -36,7 +36,6 @@ while True:
 
     for vid in diff_vids:
         if not os.path.exists(f'{LOCAL_FILE_DIR}/sum_{vid}.txt'):
-            #print('v2t_3.py起動すべし')
             subprocess.run(['python', 'v2t_3.py', vid])
         else:
             print(f'存在するから、スキップすわ！')

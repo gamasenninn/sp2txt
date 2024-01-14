@@ -2,31 +2,38 @@ import os
 import sys
 import json
 import requests
-import ftplib
-from requests.auth import HTTPDigestAuth
 from urllib3.exceptions import InsecureRequestWarning
 import openai
 from dotenv import load_dotenv
 from fl_tools import get_flex_log_token,download_audio_file,fl_post_free_items
 from isfax import classify_audio_type
+from upload import upload_to_ftp
 
 # 環境変数の読み込み
 load_dotenv()
 OPEN_API_KEY = os.environ["OPEN_API_KEY"]
-LOCAL_FILE_DIR = os.environ["LOCAL_FILE_DIR"]
-FTP_SERVER_URL = os.environ["FTP_SERVER_URL"]
-FTP_USER_ID = os.environ["FTP_USER_ID"]
-FTP_PASSWORD = os.environ["FTP_PASSWORD"]
-REMOTE_FILE_DIR = os.environ["REMOTE_FILE_DIR"]
-WAPI_POST_TRANSCRIPT = os.environ["WAPI_POST_TRANSCRIPT"]
 
 NUM_TOP_FREQ = 100
 TEMP_FILE = "tempin.m4a"
 
+# メッセージのテンプレート
+MESSAGE_TEMPLATE = """
+{keyword}次に示す項目ごとに効果的に要約してください。
+出力は下記の項目だけを純粋な配列のJSON形式でお願いします。
+{{
+    'category':(会話の全体内容を一言で表現してください),
+    'customer_info':{{'cname':(顧客の名前),'phone':(電話番号など)}},
+    'product_info':{{'pname':(商品名),'maker':(メーカ),'model':(型式など)}},
+    'limit':(具体的な期日がある場合など),
+    'problem':(問題点やクレームなど),
+    'todo':(やるべきアクションなど),
+    'summary':[(内容を箇条書きで要約)]
+}}
+"""
+
 openai.api_key = OPEN_API_KEY
+
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
-
-
 
 def transcribe_audio():
     try:
@@ -47,26 +54,8 @@ def transcribe_audio():
         print(f"Error in audio transcription: {str(e)}")
         return None
 
-def upload_to_ftp(vid, summary,src_text):
-    sum_file_name = f"sum_{vid}.txt"
-    remote_file_path = f'{REMOTE_FILE_DIR}/{sum_file_name}'
-    local_file_path = os.path.join(LOCAL_FILE_DIR, sum_file_name)
-
-    try:
-        with open(local_file_path, 'w', encoding='cp932', errors='ignore') as file:
-            file.write(summary)
-            file.write("\n\n通話履歴:\n")
-            file.write(src_text)
-        
-        ftp = ftplib.FTP(FTP_SERVER_URL)
-        ftp.set_pasv(True)
-        ftp.login(FTP_USER_ID, FTP_PASSWORD)
-        with open(local_file_path, "rb") as file:
-            ftp.storbinary(f"STOR {remote_file_path}", file)
-        ftp.quit()
-        print(f"Successfully uploaded {sum_file_name} to FTP.")
-    except Exception as e:
-        print(f"Error in FTP upload: {str(e)}")
+def create_system_message_content(template,keyword, additional_info=""):
+    return template.format(keyword=keyword) + additional_info
 
 def summarize_text(src_text):
     #req_text = extract_text(src_text)
@@ -93,26 +82,16 @@ def summarize_text(src_text):
         })
 
     try:
+        keyword = "中古農機具店での電話のやりとりです。"
+        system_message_content = create_system_message_content(MESSAGE_TEMPLATE,keyword)
+        print(system_message_content)
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo-1106",
             response_format={ "type": "json_object" },
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "中古農機具店での電話のやりとりです。次に示す項目ごとに効果的に要約してください。"
-                        "出力は下記の項目だけを純粋な配列のJSON形式でお願いします。"
-                        "{"
-                            "category:(会話の全体内容を一言で表現してください),\n"
-                            "customer_info:{cname:(顧客の名前),phone:(電話番号など),\n"
-                            "product_info:{pname:(商品名),maker:(メーカ),model:(型式など)},\n"
-                            "limit:(具体的な期日がある場合など),\n"
-                            "ploblem:(問題点やクレームなど),\n"
-                            "todo:(やるべきアクションなど),\n"
-                            "summary:[(内容を箇条書きで要約)]\n"
-                            
-                        "}"
-                    )
+                    "content": system_message_content
                 },
                 {
                     "role": "user",
@@ -126,69 +105,75 @@ def summarize_text(src_text):
         print("Exception in text summarization:", str(e))
         return str(e) # エラーが発生した場合はエラーメッセージを要約とする
 
+def get_text_or_empty(source, key):
+    """ キーに対応するテキストを取得するか、空の文字列を返す """
+    return source.get(key, "")
+
+def join_text_list(text_list):
+    """ テキストのリストを改行で結合する """
+    return "\n".join(text_list)
+
 def convert_text(json_text):
     j = json.loads(json_text)
-    converted_text = ""
-    sum_txt = ""
-    if j.get('summary'):
-        for tx in j.get('summary'):
-            sum_txt += tx+"\n" 
-    customer_txt = ""
-    customer_info = j.get('customer_info')
-    if customer_info and customer_info.get('cname'):
-        customer_txt += customer_info.get('cname')
+    
+    # 顧客情報のテキストを生成
+    customer_info = j.get('customer_info', {})
+    customer_txt = get_text_or_empty(customer_info, 'cname')
+    
+    # 商品情報のテキストを生成
+    product_info = j.get('product_info', {})
+    product_txt = "\n".join([f"【商品名】{get_text_or_empty(product_info, 'pname')}",
+                             f"【メーカー】{get_text_or_empty(product_info, 'maker')}",
+                             f"【型式】{get_text_or_empty(product_info, 'model')}"])
 
+    # 要点のテキストを生成
+    summary_txt = join_text_list(j.get('summary', []))
+
+    # 最終的なテキストを組み立て
     converted_text = (
-        f"【カテゴリ】{j.get('category')}\n"
+        f"【カテゴリ】{get_text_or_empty(j, 'category')}\n"
         f"【顧客名】{customer_txt}\n"
-        f"【商品名】{j.get('product_info').get('pname')}\n"
-        f"【メーカー】{j.get('product_info').get('maker')}\n"
-        f"【型式】{j.get('product_info').get('model')}\n"
-        f"【期日】{j.get('limit')}\n"
-        f"【問題点】{j.get('problem')}\n"
-        f"【TODO】{j.get('todo')}\n"
-        f"【要点】{sum_txt}\n\n"
+        f"{product_txt}\n"
+        f"【期日】{get_text_or_empty(j, 'limit')}\n"
+        f"【問題点】{get_text_or_empty(j, 'problem')}\n"
+        f"【TODO】{get_text_or_empty(j, 'todo')}\n"
+        f"【要点】{summary_txt}\n\n"
     )
     return converted_text
 
+
+def add_text_if_present(j, key, label):
+    if j.get(key) and j.get(key) not in ["特になし", "なし", "不明"]:
+        return f"【{label}】{j.get(key)}<br/>\n"
+    return ""
+
+def join_summary_text(summary_list):
+    """ 要約のテキストを結合する。最初の2要素のみ表示し、それ以上ある場合は'...'を追加 """
+    summary_text = "<br/>\n".join(summary_list[:2])
+    if len(summary_list) > 2:
+        summary_text += "<br/>\n..."
+    return summary_text
+
 def fl_update_free_items(vid,token,json_text):
-    j = json.loads(json_text)
 
-    sum_txt = ""
-    if j.get('summary'):
-        for tx in j.get('summary')[0:2]:
-            sum_txt += tx+"<br/>\n" 
-        if len(j.get('summary')) > 2:
-            sum_txt += "...<br/>\n"
+    print(json_text)
+    j = json.loads(json_text)   
 
-    customer_txt = ""
-    customer_info = j.get('customer_info')
-    if customer_info and customer_info.get('cname'):
-        customer_txt += customer_info.get('cname')
+    sum_txt = join_summary_text(j.get('summary', []))
+    customer_info = j.get('customer_info', {})
+    customer_txt = get_text_or_empty(customer_info, 'cname')
 
-    etc_txt = ""
-    pinfo = j.get('product_info')
-    pname = pinfo.get('pname') if pinfo and pinfo.get('pname') else ""
-    maker = pinfo.get('maker') if pinfo and pinfo.get('maker') else ""
-    model = pinfo.get('model') if pinfo and pinfo.get('model') else ""
-    #if pname or maker or model:
-    #    etc_txt += f"【製品】{maker} {pname} {model}\n" 
-
-    if j.get('limit') and j.get('limit') not in ["特になし","なし","不明"]:
-        etc_txt += f"【期日】{j.get('limit')}<br/>\n"
-
-    if j.get('problem') and j.get('problem') not in ["特になし","なし","不明"]:
-        etc_txt += f"【問題点】{j.get('problem')}<br/>\n"
-
-    if j.get('todo')  and j.get('todo') not in ["特になし","なし","不明"]:
-        etc_txt += f"【TODO】{j.get('todo')}<br/>\n"
+    #etc_txt = ""
+    etc_txt = add_text_if_present(j, 'limit', '期日')
+    etc_txt += add_text_if_present(j, 'problem', '問題点')
+    etc_txt += add_text_if_present(j, 'todo', 'TODO')
 
     items = ["","","","",""]
     items[0] = ""      #こちら側担当
     items[1] = customer_txt      #相手名
     items[2] = sum_txt      #内容
     items[3] = etc_txt      #仕切
-    items[4] = j.get('category')  #カテゴリ
+    items[4] = j.get('category',"")  #カテゴリ
 
     fl_post_free_items(vid, token, items)
 
@@ -199,8 +184,8 @@ def process_call(vid, token):
             summary = summarize_text(src_text)
             fl_update_free_items(vid,token,summary)
             conv_text = convert_text(summary)
-            #print(f'{summary}\n\n{conv_text}\n\n{src_text}')
-            upload_to_ftp(vid, conv_text,src_text)
+            if upload_to_ftp(vid, conv_text,src_text):
+                print(f"Successfully uploaded {vid} to FTP.")
         else:
             print(f"No transcription available for VID {vid}.")
     else:

@@ -100,10 +100,6 @@ def get_text_or_empty(source, key):
     """ キーに対応するテキストを取得するか、空の文字列を返す """
     return source.get(key, "")
 
-def join_text_list(text_list):
-    """ テキストのリストを改行で結合する """
-    return "\n".join(text_list)
-
 def convert_text(json_text):
     j = json.loads(json_text)
     
@@ -118,7 +114,7 @@ def convert_text(json_text):
                              f"【型式】{get_text_or_empty(product_info, 'model')}"])
 
     # 要点のテキストを生成
-    summary_txt = join_text_list(j.get('summary', []))
+    summary_txt = "\n".join(j.get('summary', []))
 
     # 最終的なテキストを組み立て
     converted_text = (

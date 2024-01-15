@@ -3,7 +3,9 @@ from pydub import AudioSegment
 import numpy as np
 import matplotlib.pyplot as plt
 
-num_top_freq = 100
+NUM_TOP_FREQ = 100
+START_FROM_TIME = 30
+END_FROM_TIME = 15
 
 def truncate(frequency, decimals=0):
     # 小数点以下を切り捨てる関数
@@ -76,7 +78,7 @@ def check_target_freq_ranges(top_freq, target_freq_ranges):
 def is_fax(audio_file_path):
     target_freq_ranges = [(1660, 1665), (2099, 2100)] #FAXの音源の特徴周波数
     fft_freq, amplitudes =  load_audio_fft(audio_file_path,start_from_beginning=30)  
-    top_freq = find_top_frequencies(fft_freq, amplitudes, num_top_freq)    
+    top_freq = find_top_frequencies(fft_freq, amplitudes, NUM_TOP_FREQ)    
     return check_target_freq_ranges(top_freq, target_freq_ranges)
 
 def detect_sound(top_freq,target_freq_ranges):
@@ -98,12 +100,12 @@ def classify_audio_type(audio_file_path):
 
     data, samplerate = load_audio(audio_file_path)
 
-    #--- 最初の30秒を解析 ---
-    first_fft_freq, first_amplitudes = calculate_fft(data, samplerate,start_from_beginning=30)
-    first_top_freq = find_top_frequencies(first_fft_freq, first_amplitudes, num_top_freq)
+    #--- 最初のN秒を解析 ---
+    first_fft_freq, first_amplitudes = calculate_fft(data, samplerate,start_from_beginning=START_FROM_TIME)
+    first_top_freq = find_top_frequencies(first_fft_freq, first_amplitudes, NUM_TOP_FREQ)
     #--- 最後の20秒を解析 ---
-    last_fft_freq, last_amplitudes = calculate_fft(data, samplerate,start_from_beginning=None, end_from_last=20) 
-    last_top_freq = find_top_frequencies(last_fft_freq, last_amplitudes, num_top_freq)    
+    last_fft_freq, last_amplitudes = calculate_fft(data, samplerate,start_from_beginning=None, end_from_last=END_FROM_TIME) 
+    last_top_freq = find_top_frequencies(last_fft_freq, last_amplitudes, NUM_TOP_FREQ)    
 
     #----- FAXの識別 ------
     if detect_sound(first_top_freq,target_fax_ranges):
@@ -132,7 +134,8 @@ def go_test():
         ["sound/call_only_02.m4a","CALL_ONLY"],
         ["sound/call_only_03.m4a","CALL_ONLY"],
         ["sound/call_hum_01.m4a","NORMAL"],
-        ["sound/call_hum_02.m4a","NORMAL"]
+        ["sound/call_hum_02.m4a","NORMAL"],
+        ["sound/call_hum_03.m4a","NORMAL"]
     ]
     for file,type in def_test:
         print(file,type)
@@ -169,7 +172,7 @@ if __name__ == "__main__":
 
 
     fft_freq, amplitudes = calculate_fft(data, samplerate,start_from_beginning=None, end_from_last=20) 
-    top_freq = find_top_frequencies(fft_freq, amplitudes, num_top_freq)
+    top_freq = find_top_frequencies(fft_freq, amplitudes, NUM_TOP_FREQ)
     
     found_freqs = check_target_freq_ranges(top_freq, target_freq_ranges)
     for freq_range, found in found_freqs.items():

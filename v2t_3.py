@@ -13,8 +13,9 @@ from replace_word import load_conversion_dict,replace_text
 # 環境変数の読み込み
 load_dotenv()
 OPEN_API_KEY = os.environ["OPEN_API_KEY"]
-TEMP_FILE = "tempin.m4a"
-REPLACE_DICT = "replace.dic" 
+TEMP_FILE = os.environ["TEMP_FILE"]
+REPLACE_DICT = os.environ["REPLACE_DICT"]
+
 # メッセージのテンプレート
 MESSAGE_TEMPLATE = """
 {keyword}次に示す項目ごとに効果的に要約してください。

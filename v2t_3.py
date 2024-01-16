@@ -7,7 +7,7 @@ import openai
 from dotenv import load_dotenv
 from fl_tools import get_flex_log_token,download_audio_file,fl_post_free_items
 from isfax import classify_audio_type
-from upload import upload_to_ftp
+from upload import upload_to_ftp,upload_init
 from replace_word import load_conversion_dict,replace_text
 
 # 環境変数の読み込み
@@ -21,19 +21,23 @@ MESSAGE_TEMPLATE = """
 {keyword}次に示す項目ごとに効果的に要約してください。
 出力は下記の項目だけを純粋な配列のJSON形式でお願いします。
 {{
-    'category':(会話の全体内容を一言で表現してください。下記の<制約>を参照。),
-    'customer_info':{{'cname':(顧客の名前),'phone':(電話番号など)}},
+    'category':(会話の全体内容を一言で表現してください。下記の<制約1>を参照。),
+    'customer_info':{{'cname':(顧客の名前。下記の<制約2>を参照。),'phone':(電話番号など)}},
     'product_info':{{'pname':(商品名),'maker':(メーカ),'model':(型式など)}},
     'limit':(具体的な期日がある場合など),
     'problem':(問題点やクレームなど),
     'todo':(やるべきアクションなど),
     'summary':[(内容を箇条書きで要約)]
 }}
-#制約
+#制約1
 中古農機具店であることは明確なのでcategoryは以下の例のように簡潔にしてください。
 例:
 中古農機具店での注文の到着の電話のやりとり -> 注文部品の到着連絡
 中古農機具店での商品購入の電話 -> 商品購入について
+#制約2
+「飛行船」は自社の名前ですので、それ以外の名前を抽出してください。
+もしそれがなければ不明としてください。
+
 """
 
 openai.api_key = OPEN_API_KEY
@@ -179,8 +183,11 @@ def fl_update_free_items(vid,token,json_text):
 
 def process_call(vid, token):
     if download_audio_file(vid, token):
+        print(f"Successfully voice downloaded {vid}.")
+        upload_init(vid)
         src_text = transcribe_audio()
         if src_text:
+            print(f"Successfully transcribed {vid}.")
             src_text = replace_text(src_text,replace_dict)
             summary = summarize_text(src_text)
             fl_update_free_items(vid,token,summary)

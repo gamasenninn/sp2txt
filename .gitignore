@@ -145,3 +145,7 @@ all_summary.txt
 trashbox/
 replace.dic
 gaaco_env/
+venv_gaaco/
+tempin.*
+
+
